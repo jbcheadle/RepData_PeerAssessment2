@@ -1,0 +1,116 @@
+---
+title: "Placeholder for Descriptive Title"
+author: "John B Cheadle"
+date: "July 3, 2017"
+output: html_document
+---
+
+## Synopsis
+This data analysis attempts to identify the **severe weather event types** that are the greatest contributors to estimated injuries, fatalities, and property damage in the United States.  Here we use the NOAA storms database; this database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.  Population Health.  Economic Consequences.  Caveats.  Concluding Statement.
+
+## Data Processing
+### Downloading the Raw Data
+Data was downloaded on 03 JUL 2017 at 2:30 PM EST from [this location.](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2)  
+Additional information regarding documentation of and frequently asked questions (FAQs) about the database are found [here](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) and [here](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf), respectively.
+
+```{r Downloading_Data, echo=TRUE, cache=TRUE}
+## Downloading Raw Data
+fileURL <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+if(!(file.exists("StormData.csv.bz2"))) {
+    download.file(url = fileURL, destfile = "./StormData.csv.bz2")
+}
+stormdata <- read.csv("StormData.csv.bz2")
+```
+
+### Quick look at data
+First, we look at a few different quick summaries of the data that will be important for our analysis.
+```{r rawdata_summaries, echo=TRUE, cache=TRUE}
+## Loading appropriate libraries for downstream analysis
+require(dplyr)
+require(ggplot2)
+## Pre-processing data
+## We need to combine property and crop damage to get better dollar estimates
+## CropDMG and PROPdmg subsets
+```
+
+
+### Processing the Raw Data - Injuries & Fatalities
+Injuries & fatalities are listed in a pretty straight-forward manner; the class of each field is numeric, and the sums of both fields are easy to calculate.
+```{r pophealth_processing, echo=TRUE}
+class(stormdata$INJURIES)
+class(stormdata$FATALITIES)
+sum(stormdata$INJURIES)
+sum(stormdata$FATALITIES)
+```
+We have about 10x as many injuries reported as we do indirect fatalities.
+
+We want to summarize the injury and fatality data based on event type for future analysis; to do this, we create two aggregate objects.
+```{r pophealth_aggregate, echo=TRUE}
+## Create the population health aggregate, listing injuries and fatalities by event type
+injury_agg <- aggregate(stormdata$INJURIES, by=list(EventType=stormdata$EVTYPE), 
+                        FUN=sum, na.rm=TRUE)
+fatality_agg <- aggregate(stormdata$FATALITIES, by=list(EventType=stormdata$EVTYPE), 
+                        FUN=sum, na.rm=TRUE)
+```
+
+
+### Processing the Raw Data - Economic Consequences
+Looking at economic consequence data - namely the PROPDMG and CROPDMG columns - the data is a bit more confusing to interpret at first glance.  We have a float in the PROPDMG and CROPDMG columns, which are followed by PROPDMGEXP and CROPDMGEXP, respectively.
+
+According to the documentation of the data linked above regarding PROPDMGEXP and CROPDMGEXP,
+
+> "Estimates should be rounded to three significant digits, followed by an alphabetical character signifying the magnitude of the number, i.e., 1.55B for $1,550,000,000.  Alphabetical characters used to signify magnitude include "K" for thousands, "M" for millions, and "B" for billions."
+
+Therefore, we assume that *only* characters that are in the following list are valid magnitudes:  
+
+* "K" or "k"
+* "M" or "m"
+* "B" or "b
+
+First, the raw data table is split up into 2 chunks, according to logical statements identifying either CROPDMGEXP or PROPDMGEXP as one of the aforementioned characters.
+```{r economic_processing, echo=TRUE, cache=TRUE}
+## Pre-processing data
+## We need to combine property and crop damage to get better dollar estimates
+## CropDMG and PROPdmg subsets
+```
+
+## Results
+
+### Addressing Population Health
+Recall in the previous Data Processing section we created an injury aggregate and fatality aggregate which lists total number of injuries/fatalities by event type.  We first sort these in descending order and view the top 15 results (because there are 835 event types, viewing all of them would be impractical).
+
+```{r Aggregate_Estimates, echo=TRUE}
+injury_agg <- injury_agg[order(injury_agg$x, decreasing=TRUE),]
+fatality_agg <- fatality_agg[order(fatality_agg$x, decreasing=TRUE),]
+head(injury_agg, n=15)
+head(fatality_agg, n=15)
+```
+
+It might be more useful to describe these values as a percentage of total injuries/fatalaties to contextualize the data.  We use the sums generated in a previous section and create a new column which divides the event type sum by sum of all event types, then multiplies by 100 to achieve the percentage of total injuries/fatalities.
+```{r PopHealth_percentages, echo=TRUE}
+injury_agg <- mutate(injury_agg, x_perc = (x/sum(x)*100))
+fatality_agg <- mutate(fatality_agg, x_perc = (x/sum(x)*100))
+head(injury_agg, n=15)
+head(fatality_agg, n=15)
+```
+Bar charts for population health
+```{r PopHealth_plots, echo=TRUE}
+##Barcharts
+```
+
+Interestingly, 10 of the top 15 event types are present in both injuries and fatalities:
+```{r PopHealth_overlaps, echo=TRUE}
+intersect(head(injury_agg, n=15)$EventType, head(fatality_agg, n=15)$EventType)
+```
+
+Results Explanation here.
+
+
+### Addressing Economic Consequences
+
+## Conclusion
+
+## Session Information
+```{r sessioninfo, echo=TRUE}
+sessionInfo()
+```

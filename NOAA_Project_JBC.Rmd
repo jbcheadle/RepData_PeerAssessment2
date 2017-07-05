@@ -2,7 +2,9 @@
 title: "Placeholder for Descriptive Title"
 author: "John B Cheadle"
 date: "July 3, 2017"
-output: html_document
+output: 
+  html_document:
+    keep_md: true
 ---
 
 ## Synopsis
@@ -24,15 +26,33 @@ stormdata <- read.csv("StormData.csv.bz2")
 
 ### Quick look at data
 First, we look at a few different quick summaries of the data that will be important for our analysis.
-```{r rawdata_summaries, echo=TRUE, cache=TRUE}
+```{r rawdata_summaries, echo=TRUE}
 ## Loading appropriate libraries for downstream analysis
 require(dplyr)
 require(ggplot2)
-## Pre-processing data
-## We need to combine property and crop damage to get better dollar estimates
-## CropDMG and PROPdmg subsets
+require(reshape2)
+
+## Summaries
+dim(stormdata)
+str(stormdata)
+head(stormdata)
+
+## Looking at EVTYPE
+length(stormdata$EVTYPE)
+head(levels(stormdata$EVTYPE), n = 15)
 ```
 
+It appears the fields that will be relevant to our analysis are as follows:
+
+* EVTYPE
+* FATALITIES
+* INJURIES
+* PROPDMG
+* PROPDMGEXP
+* CROPDMG
+* CROPDMGEXP
+
+Another consideration we make is that since EVTYPE has 985 values, we won't be able to represent every weather type on our charts.  We'll have to look at the top handful which make the majority of the impact.
 
 ### Processing the Raw Data - Injuries & Fatalities
 Injuries & fatalities are listed in a pretty straight-forward manner; the class of each field is numeric, and the sums of both fields are easy to calculate.
@@ -57,23 +77,95 @@ fatality_agg <- aggregate(stormdata$FATALITIES, by=list(EventType=stormdata$EVTY
 ### Processing the Raw Data - Economic Consequences
 Looking at economic consequence data - namely the PROPDMG and CROPDMG columns - the data is a bit more confusing to interpret at first glance.  We have a float in the PROPDMG and CROPDMG columns, which are followed by PROPDMGEXP and CROPDMGEXP, respectively.
 
-According to the documentation of the data linked above regarding PROPDMGEXP and CROPDMGEXP,
+```{r economic_quicklook, echo=TRUE}
+## What are the values for PROPDMGEXP and CROPDMGEXP?
+unique(c(levels(stormdata$PROPDMGEXP), levels(stormdata$CROPDMGEXP)))
+```
+
+So what do these fields mean? According to the documentation of the data linked above regarding PROPDMGEXP and CROPDMGEXP,
 
 > "Estimates should be rounded to three significant digits, followed by an alphabetical character signifying the magnitude of the number, i.e., 1.55B for $1,550,000,000.  Alphabetical characters used to signify magnitude include "K" for thousands, "M" for millions, and "B" for billions."
 
-Therefore, we assume that *only* characters that are in the following list are valid magnitudes:  
+The article makes no mention of any other value besides these in the rest of the document. Therefore, we assume that *only* characters that are in the following list are valid magnitudes, since we know how they are defined:  
 
 * "K" or "k"
 * "M" or "m"
 * "B" or "b
 
 First, the raw data table is split up into 2 chunks, according to logical statements identifying either CROPDMGEXP or PROPDMGEXP as one of the aforementioned characters.
-```{r economic_processing, echo=TRUE, cache=TRUE}
-## Pre-processing data
-## We need to combine property and crop damage to get better dollar estimates
-## CropDMG and PROPdmg subsets
+```{r economic_processing, echo=TRUE}
+## Convert to character
+stormdata$PROPDMGEXP <- as.character(stormdata$PROPDMGEXP)
+stormdata$CROPDMGEXP <- as.character(stormdata$CROPDMGEXP)
+
+## Use grepl() to subset
+cropdamage <- stormdata[grepl("[Kk]|[Mm]|[Bb]",stormdata$CROPDMGEXP),]
+propertydamage <- stormdata[grepl("[Kk]|[Mm]|[Bb]",stormdata$PROPDMGEXP),]
+
+## Use toupper()
+cropdamage$CROPDMGEXP <- toupper(cropdamage$CROPDMGEXP)
+propertydamage$PROPDMGEXP <- toupper(propertydamage$PROPDMGEXP)
+
+## Check work
+unique(cropdamage$CROPDMGEXP)
+unique(propertydamage$PROPDMGEXP)
+```
+Next, we need to mutate the PROPDMG and CROPDMG fields, multiplying them by PROPDMGEXP and CROPDMGEXP, respectively.  To do this, we must convert the characters into numeric values.
+
+```{r economic_processing2, echo=TRUE}
+## First we make separate calls to gsub(), which takes less time than gsubfn
+
+## cropdamage
+cropdamage$CROPDMGEXP <- gsub(pattern = "K",replacement = 1000,x=cropdamage$CROPDMGEXP)
+cropdamage$CROPDMGEXP <- gsub(pattern = "M",replacement = 1000000,x=cropdamage$CROPDMGEXP)
+cropdamage$CROPDMGEXP <- gsub(pattern = "B",replacement = 1000000000,x=cropdamage$CROPDMGEXP)
+
+## Propertydamage
+propertydamage$PROPDMGEXP <- gsub(pattern = "K",replacement = 1000,x=propertydamage$PROPDMGEXP)
+propertydamage$PROPDMGEXP <- gsub(pattern = "M",replacement = 1000000,x=propertydamage$PROPDMGEXP)
+propertydamage$PROPDMGEXP <- gsub(pattern = "B",replacement = 1000000000,x=propertydamage$PROPDMGEXP)
+
+## Then we mutate each dataset to get total value
+cropdamage <- mutate(cropdamage, CROPDMG_MUT = CROPDMG*as.numeric(CROPDMGEXP))
+propertydamage <- mutate(propertydamage, PROPDMG_MUT = PROPDMG*as.numeric(PROPDMGEXP))
+
+## Checking our results
+head(cropdamage$CROPDMG_MUT)
+head(propertydamage$PROPDMG_MUT)
 ```
 
+Finally, we want to summarize the economic damage data based on event type for future analysis; to do this, we create two additional aggregate objects.
+```{r ecodamage_aggregate, echo=TRUE}
+## Create the population health aggregate, listing injuries and fatalities by event type
+cropdmg_agg <- aggregate(cropdamage$CROPDMG_MUT, by=list(EventType=cropdamage$EVTYPE), 
+                        FUN=sum, na.rm=TRUE)
+propdmg_agg <- aggregate(propertydamage$PROPDMG_MUT, by=list(EventType=propertydamage$EVTYPE), 
+                        FUN=sum, na.rm=TRUE)
+
+## Order from most to least damage
+cropdmg_agg <- cropdmg_agg[order(cropdmg_agg$x, decreasing=TRUE),]
+propdmg_agg <- propdmg_agg[order(propdmg_agg$x, decreasing=TRUE),]
+
+```
+It might be more useful to report the damage as total damage (billions), and then break out the plot by crop damage or property damage.
+```{r combine_ecodamage_aggregate, echo=TRUE}
+## merge using full join on the aggregates, replace NAs with 0
+combined <- full_join(propdmg_agg, cropdmg_agg, by = "EventType")
+combined[is.na(combined)] <- 0
+
+## Rename the columns in the table
+names(combined) <- c("EventType", "PropertyDamage", "CropDamage")
+
+## Add a column that is the sum of both damage types so we can sort; 
+## divide by billion to make numbers more readable
+combined <- mutate(combined, Totals=PropertyDamage + CropDamage)
+combined <- combined[order(combined$Totals, decreasing=TRUE),]
+combined_top <- head(combined,n=20)
+combined_top[,2:4] <- combined_top[,2:4]/1e9
+
+## Melt to break down by variable (PropertyDamage, CropDamage)
+combined.m <- melt(combined_top[,-4])
+```
 ## Results
 
 ### Addressing Population Health
@@ -107,6 +199,9 @@ Results Explanation here.
 
 
 ### Addressing Economic Consequences
+```{r ecodamage_plots, echo=TRUE}
+ggplot(combined.m, aes(reorder(EventType,value), y= value, fill=variable)) + geom_bar(stat="identity") + coord_flip()
+```
 
 ## Conclusion
 

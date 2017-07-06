@@ -1,14 +1,14 @@
 ---
-title: "Placeholder for Descriptive Title"
+title: "Wind and Water are Primary Contributors to Economic Damage, Population Health Risk"
 author: "John B Cheadle"
-date: "July 3, 2017"
+date: "July 6, 2017"
 output: 
   html_document:
     keep_md: true
 ---
 
 ## Synopsis
-This data analysis attempts to identify the **severe weather event types** that are the greatest contributors to estimated injuries, fatalities, and property damage in the United States.  Here we use the NOAA storms database; this database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.  Population Health.  Economic Consequences.  Caveats.  Concluding Statement.
+This data analysis attempts to identify the **severe weather event types** that are the greatest contributors to estimated injuries, fatalities, and property damage in the United States.  Here we use the NOAA storms database; this database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.  We find that the severe weather events with the highest incident of fatalities are tornadoes (37.2%), heat (18.75% for excessive heat + heat) and flash floods (6.46%).  Similarly, the highest incident of injuries come about with tornadoes (65.0%), thunderstorm winds (4.95%), flooding (4.83%), and excessive heat (4.64%).  For economic consequences, we considered only those which had monetary impact in the thousands (K), millions (M), or billions (B).  The vast majority of economic damage is caused to property as opposed to crops, and the primary contributors here in order of severity are floods, typhoons, tornadoes, and storm surges.  Taken together, we conclude that wind and water are the primary severe weather events resulting in the greatest economic damage and which pose the greatest risk to population health.
 
 ## Data Processing
 ### Downloading the Raw Data
@@ -38,7 +38,7 @@ str(stormdata)
 head(stormdata)
 
 ## Looking at EVTYPE
-length(stormdata$EVTYPE)
+length(levels(stormdata$EVTYPE))
 head(levels(stormdata$EVTYPE), n = 15)
 ```
 
@@ -52,7 +52,7 @@ It appears the fields that will be relevant to our analysis are as follows:
 * CROPDMG
 * CROPDMGEXP
 
-Another consideration we make is that since EVTYPE has 985 values, we won't be able to represent every weather type on our charts.  We'll have to look at the top handful which make the majority of the impact.
+Another consideration we make is that since EVTYPE has 985 values, we won't be able to represent every weather type on our charts.  We'll have to look at the top handful which makes up the majority of the impact.
 
 ### Processing the Raw Data - Injuries & Fatalities
 Injuries & fatalities are listed in a pretty straight-forward manner; the class of each field is numeric, and the sums of both fields are easy to calculate.
@@ -72,10 +72,26 @@ injury_agg <- aggregate(stormdata$INJURIES, by=list(EventType=stormdata$EVTYPE),
 fatality_agg <- aggregate(stormdata$FATALITIES, by=list(EventType=stormdata$EVTYPE), 
                         FUN=sum, na.rm=TRUE)
 ```
+We next sort these in descending order and view the top 20 results (because there are 985 event types, viewing all of them would be impractical).
 
+```{r Aggregate_Estimates, echo=TRUE}
+injury_agg <- injury_agg[order(injury_agg$x, decreasing=TRUE),]
+fatality_agg <- fatality_agg[order(fatality_agg$x, decreasing=TRUE),]
+head(injury_agg, n=20)
+head(fatality_agg, n=20)
+```
+
+It might be more useful to describe these values as a percentage of total injuries/fatalaties to contextualize the data.  We use the sums generated in a previous section and create a new column which divides the event type sum by sum of all event types, then multiplies by 100 to achieve the percentage of total injuries/fatalities.
+
+```{r PopHealth_percentages, echo=TRUE}
+injury_agg <- mutate(injury_agg, x_perc = (x/sum(x)*100))
+fatality_agg <- mutate(fatality_agg, x_perc = (x/sum(x)*100))
+head(injury_agg, n=20)
+head(fatality_agg, n=20)
+```
 
 ### Processing the Raw Data - Economic Consequences
-Looking at economic consequence data - namely the PROPDMG and CROPDMG columns - the data is a bit more confusing to interpret at first glance.  We have a float in the PROPDMG and CROPDMG columns, which are followed by PROPDMGEXP and CROPDMGEXP, respectively.
+Looking at economic consequence data - namely the PROPDMG and CROPDMG columns - the data is a bit more confusing to interpret at first glance.  We have a numeric in the PROPDMG and CROPDMG columns, which are followed by PROPDMGEXP and CROPDMGEXP, respectively.
 
 ```{r economic_quicklook, echo=TRUE}
 ## What are the values for PROPDMGEXP and CROPDMGEXP?
@@ -86,7 +102,7 @@ So what do these fields mean? According to the documentation of the data linked 
 
 > "Estimates should be rounded to three significant digits, followed by an alphabetical character signifying the magnitude of the number, i.e., 1.55B for $1,550,000,000.  Alphabetical characters used to signify magnitude include "K" for thousands, "M" for millions, and "B" for billions."
 
-The article makes no mention of any other value besides these in the rest of the document. Therefore, we assume that *only* characters that are in the following list are valid magnitudes, since we know how they are defined:  
+The article makes no mention of any other value besides these in the rest of the document. Therefore, we assume that *only* characters that are in the following list are valid magnitudes, since we know how they are defined.  Additionally, any value of billion is going to drown out lower magnitudes:  
 
 * "K" or "k"
 * "M" or "m"
@@ -120,7 +136,7 @@ cropdamage$CROPDMGEXP <- gsub(pattern = "K",replacement = 1000,x=cropdamage$CROP
 cropdamage$CROPDMGEXP <- gsub(pattern = "M",replacement = 1000000,x=cropdamage$CROPDMGEXP)
 cropdamage$CROPDMGEXP <- gsub(pattern = "B",replacement = 1000000000,x=cropdamage$CROPDMGEXP)
 
-## Propertydamage
+## propertydamage
 propertydamage$PROPDMGEXP <- gsub(pattern = "K",replacement = 1000,x=propertydamage$PROPDMGEXP)
 propertydamage$PROPDMGEXP <- gsub(pattern = "M",replacement = 1000000,x=propertydamage$PROPDMGEXP)
 propertydamage$PROPDMGEXP <- gsub(pattern = "B",replacement = 1000000000,x=propertydamage$PROPDMGEXP)
@@ -147,6 +163,7 @@ cropdmg_agg <- cropdmg_agg[order(cropdmg_agg$x, decreasing=TRUE),]
 propdmg_agg <- propdmg_agg[order(propdmg_agg$x, decreasing=TRUE),]
 
 ```
+
 It might be more useful to report the damage as total damage (billions), and then break out the plot by crop damage or property damage.
 ```{r combine_ecodamage_aggregate, echo=TRUE}
 ## merge using full join on the aggregates, replace NAs with 0
@@ -169,41 +186,44 @@ combined.m <- melt(combined_top[,-4])
 ## Results
 
 ### Addressing Population Health
-Recall in the previous Data Processing section we created an injury aggregate and fatality aggregate which lists total number of injuries/fatalities by event type.  We first sort these in descending order and view the top 15 results (because there are 835 event types, viewing all of them would be impractical).
 
-```{r Aggregate_Estimates, echo=TRUE}
-injury_agg <- injury_agg[order(injury_agg$x, decreasing=TRUE),]
-fatality_agg <- fatality_agg[order(fatality_agg$x, decreasing=TRUE),]
-head(injury_agg, n=15)
-head(fatality_agg, n=15)
-```
+Using the aggregates generated previously, we create two bar charts showing the top 20 severe weather event types in terms of percentage of total injuries and fatalities.
 
-It might be more useful to describe these values as a percentage of total injuries/fatalaties to contextualize the data.  We use the sums generated in a previous section and create a new column which divides the event type sum by sum of all event types, then multiplies by 100 to achieve the percentage of total injuries/fatalities.
-```{r PopHealth_percentages, echo=TRUE}
-injury_agg <- mutate(injury_agg, x_perc = (x/sum(x)*100))
-fatality_agg <- mutate(fatality_agg, x_perc = (x/sum(x)*100))
-head(injury_agg, n=15)
-head(fatality_agg, n=15)
-```
-Bar charts for population health
-```{r PopHealth_plots, echo=TRUE}
-##Barcharts
-```
+First, we plot the injuries
+```{r injury_plot, echo=TRUE, fig.width=10, fig.height=6}
+## Using just the top 20 injury values
+injury_agg_top <- head(injury_agg, n=20)
 
-Interestingly, 10 of the top 15 event types are present in both injuries and fatalities:
+ggplot(injury_agg_top, aes(reorder(EventType,x_perc), y= x_perc)) + geom_bar(stat="identity") + coord_flip() + labs(title="Percentage of Total Injuries Due to Severe Weather Events by Event Type",x="Event Type", y="Percentage of Total Injuries (%)")
+```
+By far the greatest contributor here is tornadoes, with just over 60% of total injuries.  The next highest contributors (~5%) are thunderstorm winds, floods, heat & excessive heat, and lightning.  
+
+```{r fatality_plot, echo=TRUE, fig.width=10, fig.height=6}
+## Using just the top 20 fatality values
+fatality_agg_top <- head(fatality_agg, n=20)
+
+ggplot(fatality_agg_top, aes(reorder(EventType,x_perc), y= x_perc)) + geom_bar(stat="identity") + coord_flip() + labs(title="Percentage of Total Fatalities Due to Severe Weather Events by Event Type",x="Event Type", y="Percentage of Total Fatalities (%)")
+```
+This plot is a bit more spread out among the event type categories, but has a similar trend - tornadoes dominate % fatalities, with heat, thunderstorm wind, and floods rounding out the top.  Excessive heat is much higher on the fatalities list.
+
+Interestingly, 12 of the top 20 event types are present in both injuries and fatalities:
 ```{r PopHealth_overlaps, echo=TRUE}
-intersect(head(injury_agg, n=15)$EventType, head(fatality_agg, n=15)$EventType)
+intersect(head(injury_agg, n=20)$EventType, head(fatality_agg, n=20)$EventType) 
 ```
-
-Results Explanation here.
-
 
 ### Addressing Economic Consequences
-```{r ecodamage_plots, echo=TRUE}
-ggplot(combined.m, aes(reorder(EventType,value), y= value, fill=variable)) + geom_bar(stat="identity") + coord_flip()
+
+We also looked at damage to the economy from severe weather events.  Here we looked at the top 20 contributors to economic damage comprised of property damage and crop damage.
+
+```{r ecodamage_plots, echo=TRUE, fig.width=10, fig.height=6}
+ggplot(combined.m, aes(reorder(EventType,value), y= value, fill=variable)) +
+    guides(fill=guide_legend(title=NULL)) + geom_bar(stat="identity") + coord_flip() + labs(title="Total Economic Damage due to Severe Weather Events",x="Event Type", y="Economic Costs (Billions)")
 ```
 
+Property damage makes up the majority of the economic costs, dwarfing the contribution from crop damage.  Drought is the only event type to appear in the top 20 which is primarily due to crop damage.  Like the population health contributors, the event types which contribute the most to economic damage fall under the 'wind and water' category - floods, typhoons, tornadoes, and storm surges appear to make up the vast majority of economic damage in the United States.
+
 ## Conclusion
+In this data analyis, we reviewed > 50 years of data generated by the NOAA on the negative consequences of severe weather events on population health and property/crops.  We find that the primary drivers in both cases are due to 'wind and water' - tornadoes, floods, and storms together cause the highest number of injuries, fatalities, and economic damage in the United States.
 
 ## Session Information
 ```{r sessioninfo, echo=TRUE}
